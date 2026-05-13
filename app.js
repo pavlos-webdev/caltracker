@@ -18,7 +18,8 @@ let state = loadState();
 function defaultState() {
   return {
     goal: 2000,
-    week: buildWeek(),     // keyed by "YYYY-MM-DD"
+    weekOffset: 0,          // 0 = current week, -1 = last week, etc.
+    week: {},                // keyed by "YYYY-MM-DD" - will be populated as needed
     activeDateKey: todayKey(),
     activeMeal: 'Breakfast',
   };
@@ -28,10 +29,12 @@ function loadState() {
   try {
     const s = JSON.parse(localStorage.getItem('caltrack_v2'));
     if (s) {
-      // Ensure today exists
+      // Ensure today exists and migrate old state
       const tk = todayKey();
       if (!s.week[tk]) s.week[tk] = emptyDay();
       s.activeDateKey = tk;
+      // Add weekOffset if missing (for backward compatibility)
+      if (s.weekOffset === undefined) s.weekOffset = 0;
       return s;
     }
   } catch (_) {}
@@ -46,14 +49,17 @@ function todayKey() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function buildWeek() {
+function buildWeek(offset = 0) {
   const week = {};
   const today = new Date();
-  // Sun=0 → shift to Mon=0
-  const dow = (today.getDay() + 6) % 7;
+  // Calculate Monday of the target week
+  const dow = (today.getDay() + 6) % 7; // Convert Sun=0 to Mon=0
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - dow + (offset * 7));
+  
   for (let i = 0; i < 7; i++) {
-    const d = new Date(today);
-    d.setDate(today.getDate() - dow + i);
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
     week[d.toISOString().slice(0, 10)] = emptyDay();
   }
   return week;
@@ -74,6 +80,9 @@ const ringFill      = document.getElementById('ring-fill');
 const ringCal       = document.getElementById('ring-cal');
 const sumGoal       = document.getElementById('sum-goal');
 const sumEaten      = document.getElementById('sum-eaten');
+const weekRange     = document.getElementById('week-range');
+const prevWeekBtn   = document.getElementById('prev-week');
+const nextWeekBtn   = document.getElementById('next-week');
 const sumLeft       = document.getElementById('sum-left');
 const mealsContainer= document.getElementById('meals-container');
 const dayTrack      = document.getElementById('day-track');
@@ -107,11 +116,48 @@ const servingCustomAdd= document.getElementById('serving-custom-add');
 
 // ── Render ─────────────────────────────────
 function render() {
+  // Ensure current week data exists
+  const weekStart = getWeekStartDate(state.weekOffset);
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weekStart);
+    d.setDate(weekStart.getDate() + i);
+    const key = d.toISOString().slice(0, 10);
+    if (!state.week[key]) {
+      state.week[key] = emptyDay();
+    }
+  }
+  
+  renderWeekRange();
   renderDate();
   renderDayBar();
   renderSummary();
   renderMeals();
   saveState();
+}
+
+function renderWeekRange() {
+  const weekStart = getWeekStartDate(state.weekOffset);
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
+  
+  const startMonth = weekStart.toLocaleDateString('en-US', { month: 'short' });
+  const endMonth = weekEnd.toLocaleDateString('en-US', { month: 'short' });
+  const startDay = weekStart.getDate();
+  const endDay = weekEnd.getDate();
+  const year = weekStart.getFullYear();
+  
+  let rangeText;
+  if (weekStart.getMonth() === weekEnd.getMonth()) {
+    rangeText = `${startMonth} ${startDay}–${endDay}, ${year}`;
+  } else {
+    rangeText = `${startMonth} ${startDay} – ${endMonth} ${endDay}, ${year}`;
+  }
+  
+  weekRange.textContent = rangeText;
+  
+  // Enable/disable navigation buttons
+  prevWeekBtn.disabled = false; // Can always go back
+  nextWeekBtn.disabled = state.weekOffset >= 0; // Can't go to future weeks
 }
 
 function renderDate() {
@@ -122,18 +168,28 @@ function renderDate() {
 
 function renderDayBar() {
   dayTrack.innerHTML = '';
-  const keys = Object.keys(state.week).sort();
-  keys.forEach(key => {
-    const d      = new Date(key + 'T12:00:00');
-    const dow    = DAYS[(d.getDay() + 6) % 7];
+  const weekStart = getWeekStartDate(state.weekOffset);
+  const todayKeyStr = todayKey();
+  
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weekStart);
+    d.setDate(weekStart.getDate() + i);
+    const key = d.toISOString().slice(0, 10);
+    
+    const dow = DAYS[(d.getDay() + 6) % 7];
     const dayNum = d.getDate();
     const isActive = key === state.activeDateKey;
-    const dayData  = state.week[key] || emptyDay();
+    const isFuture = key > todayKeyStr;
+    const dayData = state.week[key] || emptyDay();
     const hasMeals = MEAL_NAMES.some(m => dayData[m] && dayData[m].length > 0);
 
     const btn = document.createElement('button');
-    btn.className = 'day-chip' + (isActive ? ' active' : '');
+    btn.className = 'day-chip' + (isActive ? ' active' : '') + (isFuture ? ' disabled' : '');
     btn.setAttribute('aria-pressed', isActive);
+    if (isFuture) {
+      btn.disabled = true;
+      btn.setAttribute('aria-disabled', 'true');
+    }
     btn.innerHTML = `
       <span class="day-chip-label">${dow}</span>
       <span class="day-chip-num">${dayNum}</span>
@@ -143,12 +199,14 @@ function renderDayBar() {
       dot.className = 'day-dot';
       btn.appendChild(dot);
     }
-    btn.addEventListener('click', () => {
-      state.activeDateKey = key;
-      render();
-    });
+    if (!isFuture) {
+      btn.addEventListener('click', () => {
+        state.activeDateKey = key;
+        render();
+      });
+    }
     dayTrack.appendChild(btn);
-  });
+  }
 
   // Scroll active chip into view
   const activeChip = dayTrack.querySelector('.day-chip.active');
@@ -485,6 +543,60 @@ goalSave.addEventListener('click', () => {
 });
 
 goalInput.addEventListener('keydown', e => { if (e.key === 'Enter') goalSave.click(); });
+
+// ── Week Navigation ───────────────────────
+prevWeekBtn.addEventListener('click', () => {
+  state.weekOffset -= 1;
+  // Ensure we have data for this week
+  const weekKeys = Object.keys(state.week);
+  const targetWeekStart = getWeekStartDate(state.weekOffset);
+  const targetWeekKeys = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(targetWeekStart);
+    d.setDate(targetWeekStart.getDate() + i);
+    const key = d.toISOString().slice(0, 10);
+    targetWeekKeys.push(key);
+    if (!state.week[key]) {
+      state.week[key] = emptyDay();
+    }
+  }
+  // Set active date to the same day of the week
+  const currentDayOfWeek = new Date(state.activeDateKey + 'T12:00:00').getDay();
+  const targetKey = targetWeekKeys.find(key => new Date(key + 'T12:00:00').getDay() === currentDayOfWeek);
+  if (targetKey) state.activeDateKey = targetKey;
+  render();
+});
+
+nextWeekBtn.addEventListener('click', () => {
+  if (state.weekOffset >= 0) return; // Can't go to future
+  state.weekOffset += 1;
+  // Ensure we have data for this week
+  const weekKeys = Object.keys(state.week);
+  const targetWeekStart = getWeekStartDate(state.weekOffset);
+  const targetWeekKeys = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(targetWeekStart);
+    d.setDate(targetWeekStart.getDate() + i);
+    const key = d.toISOString().slice(0, 10);
+    targetWeekKeys.push(key);
+    if (!state.week[key]) {
+      state.week[key] = emptyDay();
+    }
+  }
+  // Set active date to the same day of the week
+  const currentDayOfWeek = new Date(state.activeDateKey + 'T12:00:00').getDay();
+  const targetKey = targetWeekKeys.find(key => new Date(key + 'T12:00:00').getDay() === currentDayOfWeek);
+  if (targetKey) state.activeDateKey = targetKey;
+  render();
+});
+
+function getWeekStartDate(offset = 0) {
+  const today = new Date();
+  const dow = (today.getDay() + 6) % 7; // Convert Sun=0 to Mon=0
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - dow + (offset * 7));
+  return monday;
+}
 
 // ── Keyboard shortcuts ─────────────────────
 document.addEventListener('keydown', e => {
