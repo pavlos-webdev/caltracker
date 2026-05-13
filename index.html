@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <meta charset="utf-8"/>
+  <title>CalTrack</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ── MAIN APP ── -->
+  <main class="phone" id="app">
+
+    <!-- Header -->
+    <header class="header">
+      <div class="header-bg"></div>
+      <div class="header-content">
+        <div>
+          <h1 class="app-title">CalTrack</h1>
+          <p class="app-date" id="current-date"></p>
+        </div>
+        <div class="calorie-ring-wrap">
+          <svg class="calorie-ring" viewBox="0 0 64 64">
+            <circle class="ring-bg" cx="32" cy="32" r="27"/>
+            <circle class="ring-fill" id="ring-fill" cx="32" cy="32" r="27"
+                    stroke-dasharray="169.6" stroke-dashoffset="169.6"/>
+          </svg>
+          <div class="ring-label">
+            <span class="ring-cal" id="ring-cal">0</span>
+            <span class="ring-sub">kcal</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Day chips -->
+      <nav class="day-bar" aria-label="Day selector">
+        <div class="day-track" id="day-track"></div>
+      </nav>
+    </header>
+
+    <!-- Calorie summary bar -->
+    <section class="summary-bar">
+      <div class="summary-item">
+        <span class="summary-val" id="sum-goal">2000</span>
+        <span class="summary-lbl">Goal</span>
+      </div>
+      <div class="summary-divider"></div>
+      <div class="summary-item">
+        <span class="summary-val" id="sum-eaten">0</span>
+        <span class="summary-lbl">Eaten</span>
+      </div>
+      <div class="summary-divider"></div>
+      <div class="summary-item">
+        <span class="summary-val" id="sum-left">2000</span>
+        <span class="summary-lbl">Remaining</span>
+      </div>
+    </section>
+
+    <!-- Scroll area -->
+    <div class="scroll-area" id="scroll-area">
+
+      <!-- Meal sections rendered dynamically -->
+      <div id="meals-container"></div>
+    </div>
+
+    <!-- FAB -->
+    <button class="fab" id="fab-btn" aria-label="Add food">
+      <span class="fab-icon">+</span>
+    </button>
+
+  </main>
+
+  <!-- ── GOAL EDIT (tap calorie ring) ── -->
+  <div class="sheet-overlay" id="goal-overlay" hidden>
+    <div class="sheet" id="goal-sheet">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title">Daily Calorie Goal</h2>
+
+      <div class="goal-display">
+        <div class="goal-display-val" id="goal-display-val">2000</div>
+        <div class="goal-display-unit">kcal / day</div>
+      </div>
+
+      <!-- Presets -->
+      <div class="goal-presets" id="goal-presets">
+        <button class="goal-preset" data-cal="1500">1500<span class="goal-preset-label">Cut</span></button>
+        <button class="goal-preset" data-cal="1800">1800<span class="goal-preset-label">Mild cut</span></button>
+        <button class="goal-preset" data-cal="2000">2000<span class="goal-preset-label">Maintain</span></button>
+        <button class="goal-preset" data-cal="2500">2500<span class="goal-preset-label">Bulk</span></button>
+        <button class="goal-preset" data-cal="3000">3000<span class="goal-preset-label">Hard bulk</span></button>
+      </div>
+
+      <!-- Slider -->
+      <div class="goal-slider-wrap">
+        <div class="goal-slider-labels"><span>1200</span><span>Custom</span><span>4000</span></div>
+        <input class="goal-slider" id="goal-slider" type="range" min="1200" max="4000" step="50" value="2000"/>
+      </div>
+
+      <!-- Custom number input -->
+      <input class="goal-input" id="goal-input" type="number" inputmode="numeric" min="500" max="9999" placeholder="Or type a number…"/>
+      <button class="btn-primary" id="goal-save">Save Goal</button>
+    </div>
+  </div>
+
+  <!-- ── ADD FOOD SHEET ── -->
+  <div class="sheet-overlay" id="add-overlay" hidden>
+    <div class="sheet" id="add-sheet">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title">Add Food</h2>
+
+      <!-- Meal picker -->
+      <div class="meal-tabs" id="meal-tabs">
+        <button class="meal-tab active" data-meal="Breakfast">Breakfast</button>
+        <button class="meal-tab" data-meal="Lunch">Lunch</button>
+        <button class="meal-tab" data-meal="Dinner">Dinner</button>
+        <button class="meal-tab" data-meal="Snacks">Snacks</button>
+      </div>
+
+      <!-- Search -->
+      <div class="search-wrap">
+        <input class="search-input" id="food-search" type="search"
+               placeholder="Search food (e.g. banana, chicken breast)…"
+               autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+               inputmode="search"/>
+        <div class="search-spinner" id="search-spinner" hidden></div>
+      </div>
+
+      <!-- Results -->
+      <div class="results-list" id="results-list" aria-live="polite"></div>
+
+      <!-- Manual entry fallback -->
+      <div class="manual-wrap" id="manual-wrap" hidden>
+        <p class="manual-label">Enter manually</p>
+        <div class="manual-row">
+          <input class="manual-input" id="manual-name" type="text" placeholder="Food name"/>
+          <input class="manual-input manual-cal" id="manual-cal" type="number" inputmode="numeric" min="0" placeholder="kcal"/>
+        </div>
+        <input class="manual-input" id="manual-serving" type="text" placeholder="Serving size (optional)"/>
+        <button class="btn-primary" id="manual-add">Add Entry</button>
+      </div>
+
+      <button class="btn-ghost" id="toggle-manual">Enter manually instead</button>
+    </div>
+  </div>
+
+  <!-- ── SERVING SIZE SHEET ── -->
+  <div class="sheet-overlay" id="serving-overlay" hidden>
+    <div class="sheet" id="serving-sheet">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title" id="serving-food-name">Select Serving</h2>
+      <div id="serving-options"></div>
+      <div class="serving-custom-wrap">
+        <label class="serving-custom-label">Custom amount (g)</label>
+        <div class="serving-custom-row">
+          <input class="manual-input" id="serving-custom-g" type="number" inputmode="decimal" min="1" placeholder="grams"/>
+          <button class="btn-primary" id="serving-custom-add">Add</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
