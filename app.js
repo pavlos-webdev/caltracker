@@ -5,7 +5,7 @@
    https://fdc.nal.usda.gov/api-guide.html
 ───────────────────────────────────────── */
 
-const USDA_API_KEY = 'DEMO_KEY'; // Replace with your free key
+const USDA_API_KEY = '08KIlayOpfqq9B3XMAan2AK0UkErzwSchcRr4jsV'; // Replace with your free key
 const USDA_BASE    = 'https://api.nal.usda.gov/fdc/v1';
 
 // ── State ──────────────────────────────────
